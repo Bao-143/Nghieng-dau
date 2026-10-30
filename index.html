@@ -5,9 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Nghiêng đầu chọn đáp án</title>
 <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-<!-- Tải MediaPipe Face Mesh & Camera Utils từ CDN -->
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+<!-- Tải MediaPipe Face Mesh với phiên bản cố định chính xác -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js" crossorigin="anonymous"></script>
 <style>
 :root{--bg:#f4f5fb;--card:#fff;--fg:#1c2033;--mut:#667085;--line:#e1e4ef;--acc:#6d5efc;--ok:#16a34a;--bad:#dc2626;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1220;--card:#181c30;--fg:#eceefa;--mut:#9aa1bd;--line:#2a2f4a;--acc:#8b80ff;color-scheme:dark}}
@@ -46,7 +45,7 @@ input[type=range]{width:100%;accent-color:var(--acc)}
       <div class="flex items-center justify-between mb-2"><b>Webcam AI</b><button id="bCam" class="btn-s">Bật webcam</button></div>
       <div class="relative rounded-xl overflow-hidden" style="background:#000;aspect-ratio:4/3">
         <canvas id="cv" width="320" height="240" class="w-full h-full"></canvas>
-        <video id="vid" playsinline muted class="hidden"></video>
+        <video id="vid" playsinline autoplay muted class="hidden"></video>
       </div>
       <div class="relative h-5 rounded-full mt-3 overflow-hidden" style="background:var(--bg);border:1px solid var(--line)">
         <div id="zL" class="absolute top-0 bottom-0 left-0" style="background:color-mix(in srgb,var(--acc) 25%,transparent)"></div>
@@ -54,15 +53,15 @@ input[type=range]{width:100%;accent-color:var(--acc)}
         <div id="mk" class="absolute top-0 bottom-0 w-1.5 rounded" style="left:50%;background:var(--acc)"></div>
       </div>
       <div class="flex justify-between text-xs mut mt-1"><span>◀ Trái</span><span id="angTxt">Góc: 0°</span><span>Phải ▶</span></div>
-      <p id="camMsg" class="text-sm mut mt-2">Chưa bật webcam. Bạn vẫn có thể thử bằng phím ← → hoặc bấm vào đáp án.</p>
+      <p id="camMsg" class="text-sm mut mt-2 font-medium">Bấm “Bật webcam” để bắt đầu, hoặc chơi bằng phím ← → / bấm đáp án.</p>
       <button id="bCal" class="btn w-full mt-2">Đặt lại vị trí giữa (0°)</button>
-      <p class="text-xs mut mt-2">Ngồi tự nhiên nhìn thẳng camera rồi bấm nút để chuẩn hóa góc ban đầu.</p>
+      <p class="text-xs mut mt-2">Ngồi thẳng nhìn vào camera rồi bấm nút để cân góc nếu đang ngồi nghiêng.</p>
     </section>
 
     <section class="card rounded-2xl p-4 space-y-3 text-sm">
       <b>Cài đặt</b>
-      <label class="block">Thời gian trả lời mặc định: <b id="o_time"></b>s<input type="range" data-s="time" min="5" max="60" step="1"></label>
-      <label class="block">Ngưỡng nghiêng: <b id="o_thr"></b>°<input type="range" data-s="thr" min="6" max="35" step="1"></label>
+      <label class="block">Thời gian mỗi câu: <b id="o_time"></b>s<input type="range" data-s="time" min="5" max="60" step="1"></label>
+      <label class="block">Độ nghiêng nhận diện: <b id="o_thr"></b>°<input type="range" data-s="thr" min="6" max="35" step="1"></label>
       <label class="block">Giữ nghiêng để chọn: <b id="o_hold"></b>s<input type="range" data-s="hold" min="0.3" max="2" step="0.1"></label>
       <label class="flex items-center gap-2"><input type="checkbox" data-s="inv"> Đảo chiều trái/phải</label>
     </section>
@@ -82,8 +81,8 @@ const DEF_S={time:15,thr:14,hold:0.8,inv:false};
 let Q=load('tiltquiz:q',DEF_Q), S={...DEF_S,...load('tiltquiz:s',{})};
 function load(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):JSON.parse(JSON.stringify(d))}catch(e){return JSON.parse(JSON.stringify(d))}}
 let saveT;
-function save(){clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem('tiltquiz:q',JSON.stringify(Q));localStorage.setItem('tiltquiz:s',JSON.stringify(S))}catch(e){toast('Bộ nhớ trình duyệt đầy, hãy dùng ảnh nhỏ hơn.')}},300)}
-function toast(t){$('camMsg').textContent=t}
+function save(){clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem('tiltquiz:q',JSON.stringify(Q));localStorage.setItem('tiltquiz:s',JSON.stringify(S))}catch(e){toast('Bộ nhớ đầy, hãy dùng ảnh nhẹ hơn.')}},300)}
+function toast(t){$('camMsg').innerHTML=t}
 
 /* ---------- Cài đặt ---------- */
 document.querySelectorAll('[data-s]').forEach(el=>{
@@ -91,26 +90,28 @@ document.querySelectorAll('[data-s]').forEach(el=>{
   if(el.type==='checkbox'){el.checked=S[k];el.onchange=()=>{S[k]=el.checked;save()}}
   else{el.value=S[k];$('o_'+k).textContent=S[k];el.oninput=()=>{S[k]=+el.value;$('o_'+k).textContent=S[k];save();drawZones()}}
 });
-function drawZones(){const w=S.thr/45*50;$('zL').style.width=(50-w)+'\%';$('zR').style.width=(50-w)+'%'}
+function drawZones(){const w=S.thr/45*50;$('zL').style.width=(50-w)+'%';$('zR').style.width=(50-w)+'%'}
 drawZones();
 
-/* ---------- MediaPipe Face Mesh nhận diện góc đầu ---------- */
+/* ---------- MediaPipe Face Mesh ---------- */
 const vid=$('vid'), cv=$('cv'), cx2=cv.getContext('2d');
 const cam={
   on: false,
+  stream: null,
   rawAngle: 0,
   baseAngle: 0,
   tilt: 0,
   found: false,
-  landmarks: null
+  landmarks: null,
+  processing: false
 };
 
 let faceMesh = null;
-let cameraHelper = null;
 
 function initFaceMesh() {
+  const MP_VER = '0.4.1633559619';
   faceMesh = new FaceMesh({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@${MP_VER}/${file}`
   });
 
   faceMesh.setOptions({
@@ -124,24 +125,20 @@ function initFaceMesh() {
 }
 
 function onFaceResults(results) {
+  cam.processing = false;
   if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
     cam.found = true;
     cam.landmarks = results.multiFaceLandmarks[0];
 
-    // Landmark 33: Khóe mắt ngoài bên phải (theo góc nhìn khuôn mặt)
-    // Landmark 263: Khóe mắt ngoài bên trái
+    // Điểm 33 (mắt phải) và 263 (mắt trái)
     const pRightEye = cam.landmarks[33];
     const pLeftEye = cam.landmarks[263];
 
-    // Lưu ý: Webcam lật gương (scale -1) nên dx/dy được tính thuận theo màn hình hiển thị
-    // Khi nghiêng đầu sang phải màn hình -> góc dương; nghiêng sang trái -> góc âm
-    const dx = (pLeftEye.x - pRightEye.x);
-    const dy = (pLeftEye.y - pRightEye.y);
+    const dx = pLeftEye.x - pRightEye.x;
+    const dy = pLeftEye.y - pRightEye.y;
 
-    const calculatedAngle = Math.atan2(dy, dx) * (180 / Math.PI);
-    
-    // Làm mượt tín hiệu (Exponential Smoothing) tránh rung lắc
-    cam.rawAngle = cam.rawAngle * 0.7 + calculatedAngle * 0.3;
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    cam.rawAngle = cam.rawAngle * 0.7 + angle * 0.3;
     cam.tilt = cam.rawAngle - cam.baseAngle;
   } else {
     cam.found = false;
@@ -151,8 +148,8 @@ function onFaceResults(results) {
 
 $('bCam').onclick = async () => {
   if (cam.on) {
-    if (cameraHelper) await cameraHelper.stop();
-    if (vid.srcObject) vid.srcObject.getTracks().forEach(t => t.stop());
+    if (cam.stream) cam.stream.getTracks().forEach(t => t.stop());
+    vid.srcObject = null;
     cam.on = false;
     cam.found = false;
     $('bCam').textContent = 'Bật webcam';
@@ -161,33 +158,40 @@ $('bCam').onclick = async () => {
   }
 
   try {
-    toast('Đang khởi động AI & Webcam...');
-    if (!faceMesh) initFaceMesh();
+    toast('⏳ Đang khởi tạo mô hình AI...');
+    if (!faceMesh) {
+      if (typeof FaceMesh === 'undefined') {
+        throw new Error('Chưa tải được script FaceMesh từ CDN. Vui lòng kiểm tra lại mạng.');
+      }
+      initFaceMesh();
+    }
 
-    cameraHelper = new Camera(vid, {
-      onFrame: async () => {
-        if (cam.on) await faceMesh.send({ image: vid });
-      },
-      width: 320,
-      height: 240
+    toast('⏳ Đang yêu cầu quyền camera...');
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+      audio: false
     });
 
-    await cameraHelper.start();
+    vid.srcObject = stream;
+    cam.stream = stream;
+    await vid.play();
+
     cam.on = true;
     $('bCam').textContent = 'Tắt webcam';
-    toast('Webcam AI đã sẵn sàng! Nghiêng đầu để thử nghiệm.');
-  } catch (e) {
-    toast('Không bật được webcam (' + (e.name || e.message) + '). Hãy cấp quyền camera!');
+    toast('✅ Đã bật webcam! Ngồi thẳng và nghiêng đầu để chơi.');
+  } catch (err) {
+    console.error(err);
+    toast('<span class="text-red-500">❌ Không bật được camera: ' + (err.message || err.name) + '</span>');
   }
 };
 
 $('bCal').onclick = () => {
   if (!cam.on || !cam.found) {
-    toast('Chưa phát hiện khuôn mặt để căn giữa.');
+    toast('Cần bật webcam và nhìn vào khung hình để cân giữa.');
     return;
   }
   cam.baseAngle = cam.rawAngle;
-  toast('Đã đặt vị trí thẳng đứng hiện tại làm 0°!');
+  toast('Đã cân giữa thành công (0°)!');
 };
 
 function camDir() {
@@ -196,17 +200,25 @@ function camDir() {
   return t < -S.thr ? 'L' : t > S.thr ? 'R' : null;
 }
 
+function processFrame() {
+  if (cam.on && vid.readyState >= 2 && faceMesh && !cam.processing) {
+    cam.processing = true;
+    faceMesh.send({ image: vid }).catch(err => {
+      console.warn('Lỗi xử lý frame:', err);
+      cam.processing = false;
+    });
+  }
+}
+
 function drawCam() {
   cx2.clearRect(0, 0, 320, 240);
 
   if (cam.on && vid.readyState >= 2) {
-    // Vẽ lật gương webcam tạo cảm giác soi gương tự nhiên
     cx2.save();
     cx2.translate(320, 0);
     cx2.scale(-1, 1);
     cx2.drawImage(vid, 0, 0, 320, 240);
 
-    // Vẽ mắt và trục nghiêng mặt nếu tìm thấy
     if (cam.found && cam.landmarks) {
       const p1 = cam.landmarks[33];
       const p2 = cam.landmarks[263];
@@ -214,8 +226,8 @@ function drawCam() {
 
       cx2.fillStyle = '#22c55e';
       cx2.beginPath();
-      cx2.arc(p1.x * 320, p1.y * 240, 3, 0, 2 * Math.PI);
-      cx2.arc(p2.x * 320, p2.y * 240, 3, 0, 2 * Math.PI);
+      cx2.arc(p1.x * 320, p1.y * 240, 4, 0, 2 * Math.PI);
+      cx2.arc(p2.x * 320, p2.y * 240, 4, 0, 2 * Math.PI);
       cx2.arc(nose.x * 320, nose.y * 240, 4, 0, 2 * Math.PI);
       cx2.fill();
 
@@ -233,7 +245,8 @@ function drawCam() {
   }
 
   const t = cam.on && cam.found ? (S.inv ? -cam.tilt : cam.tilt) : 0;
-  $('mk').style.left = (50 + clamp(t, -45, 45) / 45 * 50 - 0.8) + '\%';$('angTxt').textContent = (cam.on && cam.found) ? ('Góc: ' + (t > 0 ? '+' : '') + t.toFixed(0) + '°') : 'Góc: –';
+  $('mk').style.left = (50 + clamp(t, -45, 45) / 45 * 50 - 0.8) + '%';
+  $('angTxt').textContent = (cam.on && cam.found) ? ('Góc: ' + (t > 0 ? '+' : '') + t.toFixed(0) + '°') : 'Góc: –';
 }
 
 /* ---------- Trò chơi ---------- */
@@ -250,7 +263,7 @@ function renderStart(){
   view.innerHTML=`<div class="card rounded-2xl p-6 text-center">
     <h2 class="text-xl font-bold">Sẵn sàng chưa?</h2>
     <p class="mut mt-2">${Q.length} câu hỏi · mặc định ${S.time}s/câu. Nghiêng đầu sang <b>trái</b> hoặc <b>phải</b> và giữ ${S.hold}s để chọn đáp án.</p>
-    <p class="mut text-sm mt-1">Không có webcam? Giữ phím ← / → hoặc bấm trực tiếp vào đáp án.</p>
+    <p class="mut text-sm mt-1">Không dùng webcam? Giữ phím ← / → hoặc bấm trực tiếp vào đáp án.</p>
     <button id="go" class="btn mt-5 text-lg">▶ Bắt đầu</button></div>`;
   $('go').onclick=startGame;
 }
@@ -282,14 +295,16 @@ function answer(k){
   if(ok)G.score++;
   G.log.push({q:q.q,ok,picked:k<0?'(hết giờ)':q.a[k].t,right:q.a[q.correct].t});
   $('ans'+q.correct).classList.add('ok');
-  if(k>=0&&!ok)$('ans'+k).classList.add('bad');$('fb').textContent=k<0?'⏰ Hết giờ!':ok?'✅ Chính xác!':'❌ Chưa đúng';
-  $('fb').style.color=ok?'var(--ok)':'var(--bad)';$('sc').textContent=G.score;
+  if(k>=0&&!ok)$('ans'+k).classList.add('bad');
+  $('fb').textContent=k<0?'⏰ Hết giờ!':ok?'✅ Chính xác!':'❌ Chưa đúng';
+  $('fb').style.color=ok?'var(--ok)':'var(--bad)';
+  $('sc').textContent=G.score;
   setTimeout(()=>{if(G.state!=='fb')return;G.i++;G.i>=Q.length?showEnd():showQ()},1400);
 }
 function showEnd(){
   G.state='end';
   view.innerHTML=`<div class="card rounded-2xl p-6"><h2 class="text-2xl font-bold text-center">🎉 Kết quả: ${G.score}/${Q.length}</h2>
-    <ul class="mt-4 space-y-2 text-sm">${G.log.map((l,i)=>`<li class="p-3 rounded-xl" style="background:var(--bg)">${l.ok?'✅':'❌'} <b>Câu ${i+1}:</b>${esc(l.q)}<br><span class="mut">Bạn chọn: ${esc(l.picked)} · Đáp án đúng: ${esc(l.right)}</span></li>`).join('')}</ul>
+    <ul class="mt-4 space-y-2 text-sm">${G.log.map((l,i)=>`<li class="p-3 rounded-xl" style="background:var(--bg)">${l.ok?'✅':'❌'} <b>Câu ${i+1}:</b> ${esc(l.q)}<br><span class="mut">Bạn chọn: ${esc(l.picked)} · Đáp án đúng: ${esc(l.right)}</span></li>`).join('')}</ul>
     <div class="flex gap-2 justify-center mt-5"><button id="again" class="btn">Chơi lại</button><button id="toEdit" class="tab">Soạn câu hỏi</button></div></div>`;
   $('again').onclick=startGame;$('toEdit').onclick=()=>setTab('edit');
 }
@@ -297,7 +312,7 @@ function gameTick(now){
   if(G.state!=='q')return;
   const left=G.dur-(now-G.t0);
   if(left<=0){answer(-1);return}
-  $('tb').style.width=(left/G.dur*100)+'\%';$('tl').textContent=Math.ceil(left/1000)+'s';
+  $('tb').style.width=(left/G.dur*100)+'%';$('tl').textContent=Math.ceil(left/1000)+'s';
   const dir=keyDir||camDir();
   if(dir!==G.dir){G.dir=dir;G.since=now}
   [0,1].forEach(k=>{const el=$('p'+k);if(el)el.style.width=(dir===(k?'R':'L')?clamp((now-G.since)/(S.hold*1000),0,1)*100:0)+'%'});
@@ -319,7 +334,8 @@ function renderEditor(){
    <div class="card rounded-2xl p-4">
     <div class="flex items-center justify-between"><b>Câu ${i+1}</b>
       <div class="flex gap-1"><button class="btn-s" data-act="up" data-i="${i}">↑</button><button class="btn-s" data-act="dn" data-i="${i}">↓</button><button class="btn-s" data-act="del" data-i="${i}">✕ Xoá</button></div></div>
-    <textarea class="inp mt-2" rows="2" data-f="q" data-i="${i}" placeholder="Nội dung câu hỏi">${esc(q.q)}</textarea>${imgBox(i,'q',q.qImg)}
+    <textarea class="inp mt-2" rows="2" data-f="q" data-i="${i}" placeholder="Nội dung câu hỏi">${esc(q.q)}</textarea>
+    ${imgBox(i,'q',q.qImg)}
     <div class="grid sm:grid-cols-2 gap-3 mt-3">${[0,1].map(k=>`
       <div class="p-3 rounded-xl" style="border:1px solid var(--line)">
         <div class="flex justify-between text-sm"><span>${k?'Nghiêng phải ▶':'◀ Nghiêng trái'}</span>
@@ -327,7 +343,7 @@ function renderEditor(){
         <input class="inp mt-2" data-f="t" data-i="${i}" data-k="${k}" value="${esc(q.a[k].t)}" placeholder="Nội dung đáp án">
         ${imgBox(i,k,q.a[k].img)}</div>`).join('')}</div>
     <label class="text-sm mt-3 flex items-center gap-2">Thời gian riêng (giây):
-      <input type="number" min="3" max="120" class="inp" style="width:90px" data-f="time" data-i="${i}" value="${q.time\vert{}\vert{}''}" placeholder="${S.time}"> <span class="mut">để trống = mặc định</span></label>
+      <input type="number" min="3" max="120" class="inp" style="width:90px" data-f="time" data-i="${i}" value="${q.time||''}" placeholder="${S.time}"> <span class="mut">để trống = mặc định</span></label>
    </div>`).join('')}
    <div class="flex gap-2"><button class="btn" data-act="add">＋ Thêm câu hỏi</button><button class="btn-s" data-act="reset">Khôi phục câu mẫu</button></div></div>`;
 }
@@ -341,4 +357,40 @@ view.addEventListener('input',e=>{
 view.addEventListener('change',e=>{const t=e.target;if(t.dataset.f==='c'){Q[+t.dataset.i].correct=+t.dataset.k;save()}});
 view.addEventListener('click',e=>{
   const b=e.target.closest('[data-act]');if(!b)return;
-  const act=b.dataset.act,i=+b.dataset.i,k=b.dataset.k==='q'?'
+  const act=b.dataset.act,i=+b.dataset.i,k=b.dataset.k==='q'?'q':+b.dataset.k;
+  if(act==='add')Q.push({q:'',qImg:'',a:[{t:'',img:''},{t:'',img:''}],correct:0,time:null});
+  else if(act==='del')Q.splice(i,1);
+  else if(act==='up'&&i>0)[Q[i-1],Q[i]]=[Q[i],Q[i-1]];
+  else if(act==='dn'&&i<Q.length-1)[Q[i+1],Q[i]]=[Q[i],Q[i+1]];
+  else if(act==='rm')setImg(Q[i],k,'');
+  else if(act==='reset'){Q=JSON.parse(JSON.stringify(DEF_Q))}
+  else if(act==='img'){pickImage(url=>{setImg(Q[i],k,url);save();renderEditor()});return}
+  save();renderEditor();
+});
+function pickImage(cb){
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/*';
+  inp.onchange=()=>{
+    const f=inp.files[0];if(!f)return;
+    const fr=new FileReader();
+    fr.onload=()=>{const im=new Image();im.onload=()=>{
+      const m=640,s=Math.min(1,m/Math.max(im.width,im.height)),c=document.createElement('canvas');
+      c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);
+      c.getContext('2d').drawImage(im,0,0,c.width,c.height);cb(c.toDataURL('image/jpeg',.8));
+    };im.src=fr.result};
+    fr.readAsDataURL(f);
+  };
+  inp.click();
+}
+
+/* ---------- Vòng lặp chính ---------- */
+function loop(now){
+  processFrame();
+  drawCam();
+  gameTick(now);
+  requestAnimationFrame(loop);
+}
+renderStart();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
