@@ -53,7 +53,7 @@ input[type=range]{width:100%;accent-color:var(--acc)}
       <div class="flex justify-between text-xs mut mt-1"><span>◀ Trái</span><span id="angTxt">Góc: 0°</span><span>Phải ▶</span></div>
       <p id="camMsg" class="text-sm mut mt-2">Chưa bật webcam. Bạn vẫn có thể thử bằng phím ← → hoặc bấm vào đáp án.</p>
       <button id="bCal" class="btn w-full mt-2">Hiệu chỉnh</button>
-      <p class="text-xs mut mt-2">Ngồi thẳng, đặt mặt vào khung oval, nơi đủ sáng, rồi bấm “Hiệu chỉnh”.</p>
+      <p class="text-xs mut mt-2">Ngồi thẳng, căn hai mắt vào hai dấu tròn trong khung oval, nơi đủ sáng và không để tóc mái che mắt, rồi bấm “Hiệu chỉnh”. Khung xanh bám theo hai mắt, đường nối hai mắt chính là góc nghiêng đầu.</p>
     </section>
 
     <section class="card rounded-2xl p-4 space-y-3 text-sm">
@@ -61,7 +61,7 @@ input[type=range]{width:100%;accent-color:var(--acc)}
       <label class="block">Thời gian trả lời mặc định: <b id="o_time"></b>s<input type="range" data-s="time" min="5" max="60" step="1"></label>
       <label class="block">Ngưỡng nghiêng: <b id="o_thr"></b>°<input type="range" data-s="thr" min="6" max="35" step="1"></label>
       <label class="block">Giữ nghiêng để chọn: <b id="o_hold"></b>s<input type="range" data-s="hold" min="0.3" max="2" step="0.1"></label>
-      <label class="block">Dung sai màu da: <b id="o_tol"></b><input type="range" data-s="tol" min="6" max="30" step="1"></label>
+      <label class="block">Độ nhạy nhận mắt: <b id="o_tol"></b>%<input type="range" data-s="tol" min="40" max="90" step="1"></label>
       <label class="flex items-center gap-2"><input type="checkbox" data-s="inv"> Đảo chiều trái/phải</label>
     </section>
   </aside>
@@ -76,8 +76,8 @@ const DEF_Q=[
  {q:'Một tuần có bao nhiêu ngày?',qImg:'',a:[{t:'6 ngày',img:''},{t:'7 ngày',img:''}],correct:1,time:null},
  {q:'Mặt trời mọc ở hướng nào?',qImg:'',a:[{t:'Hướng Đông',img:''},{t:'Hướng Tây',img:''}],correct:0,time:10}
 ];
-const DEF_S={time:15,thr:14,hold:0.8,tol:14,inv:false};
-let Q=load('tiltquiz:q',DEF_Q), S={...DEF_S,...load('tiltquiz:s',{})};
+const DEF_S={time:15,thr:14,hold:0.8,tol:68,inv:false};
+let Q=load('tiltquiz:q',DEF_Q), S={...DEF_S,...load('tiltquiz:s',{})};if(!(S.tol>=40))S.tol=68;
 function load(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):JSON.parse(JSON.stringify(d))}catch(e){return JSON.parse(JSON.stringify(d))}}
 let saveT;
 function save(){clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem('tiltquiz:q',JSON.stringify(Q));localStorage.setItem('tiltquiz:s',JSON.stringify(S))}catch(e){toast('Bộ nhớ trình duyệt đầy, hãy dùng ảnh nhỏ hơn hoặc ít ảnh hơn.')}},300)}
@@ -92,62 +92,71 @@ document.querySelectorAll('[data-s]').forEach(el=>{
 function drawZones(){const w=S.thr/45*50;$('zL').style.width=(50-w)+'%';$('zR').style.width=(50-w)+'%'}
 drawZones();
 
-/* ---------- Webcam & nhận diện nghiêng đầu (CamShift thu gọn trên màu da) ---------- */
-const W=96,H=72, vid=$('vid'), cv=$('cv'), cx2=cv.getContext('2d');
+/* ---------- Webcam & nhận diện nghiêng đầu (theo đường nối hai mắt) ---------- */
+const W=160,H=120, vid=$('vid'), cv=$('cv'), cx2=cv.getContext('2d');
 const pc=document.createElement('canvas');pc.width=W;pc.height=H;
 const px=pc.getContext('2d',{willReadFrequently:true});
-const cam={on:false,cal:null,win:{x:W/2,y:H/2,rx:22,ry:28},angle:0,base:0,tilt:0,found:false,calN:0,calSum:0,reset:false,last:0};
-const cbcr=(r,g,b)=>[128-0.1687*r-0.3313*g+0.5*b,128+0.5*r-0.4187*g-0.0813*b];
+const EY=0.42,EX=0.1,HX=10,HY=8;
+const cam={on:false,cal:null,eL:{x:0,y:0},eR:{x:0,y:0},angle:0,base:0,tilt:0,found:false,calN:0,calSum:0,reset:false,last:0};
+const lum=(d,i)=>0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
 function grab(){px.save();px.translate(W,0);px.scale(-1,1);px.drawImage(vid,0,0,W,H);px.restore();return px.getImageData(0,0,W,H).data}
-
+function eyeShift(d,e,thr){
+  let sw=0,sx=0,sy=0;
+  const x0=Math.max(0,Math.round(e.x-HX)),x1=Math.min(W-1,Math.round(e.x+HX)),y0=Math.max(0,Math.round(e.y-HY)),y1=Math.min(H-1,Math.round(e.y+HY));
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const v=thr-lum(d,(y*W+x)*4);if(v>0){sw+=v;sx+=v*x;sy+=v*y}}
+  return sw>0?{x:sx/sw,y:sy/sw,m:sw}:{m:0};
+}
 $('bCam').onclick=async()=>{
   if(cam.on){vid.srcObject.getTracks().forEach(t=>t.stop());cam.on=false;cam.cal=null;$('bCam').textContent='Bật webcam';toast('Đã tắt webcam.');return}
   try{
     const s=await navigator.mediaDevices.getUserMedia({video:{width:320,height:240,facingMode:'user'},audio:false});
     vid.srcObject=s;await vid.play();cam.on=true;$('bCam').textContent='Tắt webcam';
-    toast('Đã bật webcam. Đặt mặt vào khung oval rồi bấm “Hiệu chỉnh”.');
+    toast('Đã bật webcam. Căn hai mắt vào hai dấu tròn, ngồi thẳng rồi bấm “Hiệu chỉnh”.');
   }catch(e){toast('Không bật được webcam ('+(e.name||'lỗi')+'). Hãy cho phép camera, hoặc chơi bằng phím ← → / bấm đáp án.')}
 };
 $('bCal').onclick=()=>{
   if(!cam.on){toast('Hãy bật webcam trước.');return}
-  const d=grab();let sc=0,sr=0,n=0;
-  for(let y=Math.round(H*.38);y<Math.round(H*.38)+10;y++)for(let x=W/2-5;x<W/2+5;x++){const i=(y*W+x)*4;const[c,r]=cbcr(d[i],d[i+1],d[i+2]);sc+=c;sr+=r;n++}
-  cam.cal={cb:sc/n,cr:sr/n};cam.win={x:W/2,y:H*.5,rx:22,ry:28};cam.base=0;cam.calN=25;cam.calSum=0;cam.reset=true;
-  toast('Đang hiệu chỉnh… giữ đầu thẳng trong 1–2 giây.');
+  const d=grab();let s=0,n=0;
+  for(let y=Math.round(H*.5);y<Math.round(H*.5)+8;y++)for(let x=W/2-6;x<W/2+6;x++){s+=lum(d,(y*W+x)*4);n++}
+  const thr=s/n*S.tol/100;
+  const L={x:W/2-EX*W,y:H*EY},R={x:W/2+EX*W,y:H*EY};let a,b;
+  for(let i=0;i<8;i++){a=eyeShift(d,L,thr);b=eyeShift(d,R,thr);if(a.m){L.x=a.x;L.y=a.y}if(b.m){R.x=b.x;R.y=b.y}}
+  if(!a.m||!b.m){toast('Không thấy hai mắt. Căn mắt vào hai dấu tròn, tăng ánh sáng, vén tóc mái, hoặc tăng “Độ nhạy nhận mắt”.');return}
+  cam.cal={thr,mL:a.m,mR:b.m,dist:Math.hypot(R.x-L.x,R.y-L.y)};
+  cam.eL=L;cam.eR=R;cam.base=0;cam.calN=20;cam.calSum=0;cam.reset=true;cam.found=true;
+  toast('Đang hiệu chỉnh… giữ đầu thẳng khoảng 1 giây.');
 };
 function analyse(){
-  const d=grab(),w=cam.win,tol=S.tol;
-  let n=0,sx=0,sy=0,sxx=0,syy=0,sxy=0,nu=0,ux=0,uy=0,nl=0,lx=0,ly=0;
-  const x0=Math.max(0,Math.floor(w.x-w.rx)),x1=Math.min(W-1,Math.ceil(w.x+w.rx)),y0=Math.max(0,Math.floor(w.y-w.ry)),y1=Math.min(H-1,Math.ceil(w.y+w.ry));
-  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
-    const ex=(x-w.x)/w.rx,ey=(y-w.y)/w.ry;if(ex*ex+ey*ey>1)continue;
-    const i=(y*W+x)*4,[c,r]=cbcr(d[i],d[i+1],d[i+2]);
-    if(Math.abs(c-cam.cal.cb)>tol||Math.abs(r-cam.cal.cr)>tol*1.2)continue;
-    n++;sx+=x;sy+=y;sxx+=x*x;syy+=y*y;sxy+=x*y;
-    if(y<w.y){nu++;ux+=x;uy+=y}else{nl++;lx+=x;ly+=y}
-  }
-  cam.found=n>60;
-  if(!cam.found){cam.win.x+=(W/2-w.x)*.05;cam.win.y+=(H/2-w.y)*.05;return}
-  const cx=sx/n,cy=sy/n,mu20=sxx/n-cx*cx,mu02=syy/n-cy*cy,mu11=sxy/n-cx*cy;
-  let th=0.5*Math.atan2(2*mu11,mu20-mu02)*180/Math.PI;
-  let raw=th>0?th-90:th+90;
-  if(nu>12&&nl>12){const a2=Math.atan2(ux/nu-lx/nl,ly/nl-uy/nu)*180/Math.PI;raw=(raw+a2)/2}
-  if(cam.reset){cam.angle=raw;cam.reset=false}else cam.angle+=(raw-cam.angle)*.35;
-  if(cam.calN>0){cam.calSum+=cam.angle;if(--cam.calN===0){cam.base=cam.calSum/25;toast('Đã hiệu chỉnh xong. Nghiêng đầu sang trái hoặc phải!')}}
+  const d=grab(),c=cam.cal;
+  const a=eyeShift(d,cam.eL,c.thr),b=eyeShift(d,cam.eR,c.thr);
+  const dist=a.m&&b.m?Math.hypot(b.x-a.x,b.y-a.y):0;
+  cam.found=a.m>c.mL*.25&&b.m>c.mR*.25&&dist>c.dist*.6&&dist<c.dist*1.6;
+  if(!cam.found)return;
+  cam.eL.x+=(a.x-cam.eL.x)*.8;cam.eL.y+=(a.y-cam.eL.y)*.8;
+  cam.eR.x+=(b.x-cam.eR.x)*.8;cam.eR.y+=(b.y-cam.eR.y)*.8;
+  const raw=Math.atan2(cam.eR.y-cam.eL.y,cam.eR.x-cam.eL.x)*180/Math.PI;
+  if(cam.reset){cam.angle=raw;cam.reset=false}else cam.angle+=(raw-cam.angle)*.4;
+  if(cam.calN>0){cam.calSum+=cam.angle;if(--cam.calN===0){cam.base=cam.calSum/20;toast('Đã hiệu chỉnh xong. Nghiêng đầu sang trái hoặc phải!')}}
   cam.tilt=cam.angle-cam.base;
-  w.x+=(cx-w.x)*.7;w.y+=(cy-w.y)*.7;
 }
 function camDir(){
   if(!cam.on||!cam.cal||!cam.found||cam.calN>0)return null;
-  let t=S.inv?-cam.tilt:cam.tilt;
+  const t=S.inv?-cam.tilt:cam.tilt;
   return t<-S.thr?'L':t>S.thr?'R':null;
 }
 function drawCam(){
   if(cam.on&&vid.readyState>=2){cx2.save();cx2.translate(320,0);cx2.scale(-1,1);cx2.drawImage(vid,0,0,320,240);cx2.restore()}
   else{cx2.fillStyle='#111';cx2.fillRect(0,0,320,240)}
-  cx2.lineWidth=2;
-  if(cam.cal&&cam.found){const k=320/W,w=cam.win;cx2.strokeStyle='#22c55e';cx2.beginPath();cx2.ellipse(w.x*k,w.y*k,w.rx*k,w.ry*k,(cam.tilt*(S.inv?-1:1))*Math.PI/180,0,7);cx2.stroke()}
-  else{cx2.strokeStyle='rgba(255,255,255,.7)';cx2.setLineDash([6,5]);cx2.beginPath();cx2.ellipse(160,120,60,80,0,0,7);cx2.stroke();cx2.setLineDash([])}
+  cx2.lineWidth=2;const k=320/W;
+  if(cam.cal){
+    cx2.strokeStyle=cam.found?'#22c55e':'#ef4444';
+    [cam.eL,cam.eR].forEach(e=>cx2.strokeRect((e.x-HX)*k,(e.y-HY)*k,HX*2*k,HY*2*k));
+    cx2.beginPath();cx2.moveTo(cam.eL.x*k,cam.eL.y*k);cx2.lineTo(cam.eR.x*k,cam.eR.y*k);cx2.stroke();
+  }else{
+    cx2.strokeStyle='rgba(255,255,255,.75)';cx2.setLineDash([6,5]);
+    cx2.beginPath();cx2.ellipse(160,120,60,80,0,0,7);cx2.stroke();cx2.setLineDash([]);
+    [-1,1].forEach(s=>{cx2.beginPath();cx2.arc(160+s*EX*320,EY*240,10,0,7);cx2.stroke()});
+  }
   const t=cam.on&&cam.cal?(S.inv?-cam.tilt:cam.tilt):0;
   $('mk').style.left=(50+clamp(t,-45,45)/45*50-0.8)+'%';
   $('angTxt').textContent=cam.cal?('Góc: '+(t>0?'+':'')+t.toFixed(0)+'°'):'Góc: –';
