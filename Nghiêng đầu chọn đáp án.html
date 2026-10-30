@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nghiêng đầu chọn đáp án</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<style>
+:root{--bg:#f4f5fb;--card:#fff;--fg:#1c2033;--mut:#667085;--line:#e1e4ef;--acc:#6d5efc;--ok:#16a34a;--bad:#dc2626;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1220;--card:#181c30;--fg:#eceefa;--mut:#9aa1bd;--line:#2a2f4a;--acc:#8b80ff;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1220;--card:#181c30;--fg:#eceefa;--mut:#9aa1bd;--line:#2a2f4a;--acc:#8b80ff;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.card{background:var(--card);border:1px solid var(--line)}
+.mut{color:var(--mut)}
+.inp{background:var(--bg);border:1px solid var(--line);border-radius:.6rem;padding:.45rem .7rem;color:var(--fg);width:100%}
+.btn{background:var(--acc);color:#fff;border-radius:.7rem;padding:.5rem 1rem;font-weight:600}
+.btn:hover{filter:brightness(1.08)}
+.btn-s{border:1px solid var(--line);border-radius:.5rem;padding:.2rem .6rem;font-size:.8rem}
+.btn-s:hover{border-color:var(--acc)}
+.tab{padding:.45rem 1rem;border-radius:.7rem;font-weight:600;border:1px solid var(--line)}
+.tab.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.ans{border:3px solid var(--line);border-radius:1rem;padding:1rem;text-align:center;background:var(--bg);cursor:pointer;position:relative;overflow:hidden;transition:transform .15s}
+.ans:hover{transform:translateY(-2px)}
+.ans.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 15%,var(--bg))}
+.ans.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 15%,var(--bg))}
+.pbar{position:absolute;left:0;bottom:0;height:8px;background:var(--acc);width:0}
+input[type=range]{width:100%;accent-color:var(--acc)}
+</style>
+</head>
+<body>
+<div class="max-w-6xl mx-auto p-4 grid gap-4 lg:grid-cols-[1fr_330px]">
+  <main>
+    <header class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <h1 class="text-2xl font-extrabold">🙃 Nghiêng đầu chọn đáp án</h1>
+      <nav class="flex gap-2"><button id="tPlay" class="tab on">Chơi</button><button id="tEdit" class="tab">Soạn câu hỏi</button></nav>
+    </header>
+    <div id="view"></div>
+  </main>
+
+  <aside class="space-y-4">
+    <section class="card rounded-2xl p-4">
+      <div class="flex items-center justify-between mb-2"><b>Webcam</b><button id="bCam" class="btn-s">Bật webcam</button></div>
+      <div class="relative rounded-xl overflow-hidden" style="background:#000;aspect-ratio:4/3">
+        <canvas id="cv" width="320" height="240" class="w-full h-full"></canvas>
+        <video id="vid" playsinline muted class="hidden"></video>
+      </div>
+      <div class="relative h-5 rounded-full mt-3 overflow-hidden" style="background:var(--bg);border:1px solid var(--line)">
+        <div id="zL" class="absolute top-0 bottom-0 left-0" style="background:color-mix(in srgb,var(--acc) 25%,transparent)"></div>
+        <div id="zR" class="absolute top-0 bottom-0 right-0" style="background:color-mix(in srgb,var(--acc) 25%,transparent)"></div>
+        <div id="mk" class="absolute top-0 bottom-0 w-1.5 rounded" style="left:50%;background:var(--acc)"></div>
+      </div>
+      <div class="flex justify-between text-xs mut mt-1"><span>◀ Trái</span><span id="angTxt">Góc: 0°</span><span>Phải ▶</span></div>
+      <p id="camMsg" class="text-sm mut mt-2">Chưa bật webcam. Bạn vẫn có thể thử bằng phím ← → hoặc bấm vào đáp án.</p>
+      <button id="bCal" class="btn w-full mt-2">Hiệu chỉnh</button>
+      <p class="text-xs mut mt-2">Ngồi thẳng, đặt mặt vào khung oval, nơi đủ sáng, rồi bấm “Hiệu chỉnh”.</p>
+    </section>
+
+    <section class="card rounded-2xl p-4 space-y-3 text-sm">
+      <b>Cài đặt</b>
+      <label class="block">Thời gian trả lời mặc định: <b id="o_time"></b>s<input type="range" data-s="time" min="5" max="60" step="1"></label>
+      <label class="block">Ngưỡng nghiêng: <b id="o_thr"></b>°<input type="range" data-s="thr" min="6" max="35" step="1"></label>
+      <label class="block">Giữ nghiêng để chọn: <b id="o_hold"></b>s<input type="range" data-s="hold" min="0.3" max="2" step="0.1"></label>
+      <label class="block">Dung sai màu da: <b id="o_tol"></b><input type="range" data-s="tol" min="6" max="30" step="1"></label>
+      <label class="flex items-center gap-2"><input type="checkbox" data-s="inv"> Đảo chiều trái/phải</label>
+    </section>
+  </aside>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const DEF_Q=[
+ {q:'Thủ đô của Việt Nam là thành phố nào?',qImg:'',a:[{t:'Hà Nội',img:''},{t:'Đà Nẵng',img:''}],correct:0,time:null},
+ {q:'Một tuần có bao nhiêu ngày?',qImg:'',a:[{t:'6 ngày',img:''},{t:'7 ngày',img:''}],correct:1,time:null},
+ {q:'Mặt trời mọc ở hướng nào?',qImg:'',a:[{t:'Hướng Đông',img:''},{t:'Hướng Tây',img:''}],correct:0,time:10}
+];
+const DEF_S={time:15,thr:14,hold:0.8,tol:14,inv:false};
+let Q=load('tiltquiz:q',DEF_Q), S={...DEF_S,...load('tiltquiz:s',{})};
+function load(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):JSON.parse(JSON.stringify(d))}catch(e){return JSON.parse(JSON.stringify(d))}}
+let saveT;
+function save(){clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem('tiltquiz:q',JSON.stringify(Q));localStorage.setItem('tiltquiz:s',JSON.stringify(S))}catch(e){toast('Bộ nhớ trình duyệt đầy, hãy dùng ảnh nhỏ hơn hoặc ít ảnh hơn.')}},300)}
+function toast(t){$('camMsg').textContent=t}
+
+/* ---------- Cài đặt ---------- */
+document.querySelectorAll('[data-s]').forEach(el=>{
+  const k=el.dataset.s;
+  if(el.type==='checkbox'){el.checked=S[k];el.onchange=()=>{S[k]=el.checked;save()}}
+  else{el.value=S[k];$('o_'+k).textContent=S[k];el.oninput=()=>{S[k]=+el.value;$('o_'+k).textContent=S[k];save();drawZones()}}
+});
+function drawZones(){const w=S.thr/45*50;$('zL').style.width=(50-w)+'%';$('zR').style.width=(50-w)+'%'}
+drawZones();
+
+/* ---------- Webcam & nhận diện nghiêng đầu (CamShift thu gọn trên màu da) ---------- */
+const W=96,H=72, vid=$('vid'), cv=$('cv'), cx2=cv.getContext('2d');
+const pc=document.createElement('canvas');pc.width=W;pc.height=H;
+const px=pc.getContext('2d',{willReadFrequently:true});
+const cam={on:false,cal:null,win:{x:W/2,y:H/2,rx:22,ry:28},angle:0,base:0,tilt:0,found:false,calN:0,calSum:0,reset:false,last:0};
+const cbcr=(r,g,b)=>[128-0.1687*r-0.3313*g+0.5*b,128+0.5*r-0.4187*g-0.0813*b];
+function grab(){px.save();px.translate(W,0);px.scale(-1,1);px.drawImage(vid,0,0,W,H);px.restore();return px.getImageData(0,0,W,H).data}
+
+$('bCam').onclick=async()=>{
+  if(cam.on){vid.srcObject.getTracks().forEach(t=>t.stop());cam.on=false;cam.cal=null;$('bCam').textContent='Bật webcam';toast('Đã tắt webcam.');return}
+  try{
+    const s=await navigator.mediaDevices.getUserMedia({video:{width:320,height:240,facingMode:'user'},audio:false});
+    vid.srcObject=s;await vid.play();cam.on=true;$('bCam').textContent='Tắt webcam';
+    toast('Đã bật webcam. Đặt mặt vào khung oval rồi bấm “Hiệu chỉnh”.');
+  }catch(e){toast('Không bật được webcam ('+(e.name||'lỗi')+'). Hãy cho phép camera, hoặc chơi bằng phím ← → / bấm đáp án.')}
+};
+$('bCal').onclick=()=>{
+  if(!cam.on){toast('Hãy bật webcam trước.');return}
+  const d=grab();let sc=0,sr=0,n=0;
+  for(let y=Math.round(H*.38);y<Math.round(H*.38)+10;y++)for(let x=W/2-5;x<W/2+5;x++){const i=(y*W+x)*4;const[c,r]=cbcr(d[i],d[i+1],d[i+2]);sc+=c;sr+=r;n++}
+  cam.cal={cb:sc/n,cr:sr/n};cam.win={x:W/2,y:H*.5,rx:22,ry:28};cam.base=0;cam.calN=25;cam.calSum=0;cam.reset=true;
+  toast('Đang hiệu chỉnh… giữ đầu thẳng trong 1–2 giây.');
+};
+function analyse(){
+  const d=grab(),w=cam.win,tol=S.tol;
+  let n=0,sx=0,sy=0,sxx=0,syy=0,sxy=0,nu=0,ux=0,uy=0,nl=0,lx=0,ly=0;
+  const x0=Math.max(0,Math.floor(w.x-w.rx)),x1=Math.min(W-1,Math.ceil(w.x+w.rx)),y0=Math.max(0,Math.floor(w.y-w.ry)),y1=Math.min(H-1,Math.ceil(w.y+w.ry));
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+    const ex=(x-w.x)/w.rx,ey=(y-w.y)/w.ry;if(ex*ex+ey*ey>1)continue;
+    const i=(y*W+x)*4,[c,r]=cbcr(d[i],d[i+1],d[i+2]);
+    if(Math.abs(c-cam.cal.cb)>tol||Math.abs(r-cam.cal.cr)>tol*1.2)continue;
+    n++;sx+=x;sy+=y;sxx+=x*x;syy+=y*y;sxy+=x*y;
+    if(y<w.y){nu++;ux+=x;uy+=y}else{nl++;lx+=x;ly+=y}
+  }
+  cam.found=n>60;
+  if(!cam.found){cam.win.x+=(W/2-w.x)*.05;cam.win.y+=(H/2-w.y)*.05;return}
+  const cx=sx/n,cy=sy/n,mu20=sxx/n-cx*cx,mu02=syy/n-cy*cy,mu11=sxy/n-cx*cy;
+  let th=0.5*Math.atan2(2*mu11,mu20-mu02)*180/Math.PI;
+  let raw=th>0?th-90:th+90;
+  if(nu>12&&nl>12){const a2=Math.atan2(ux/nu-lx/nl,ly/nl-uy/nu)*180/Math.PI;raw=(raw+a2)/2}
+  if(cam.reset){cam.angle=raw;cam.reset=false}else cam.angle+=(raw-cam.angle)*.35;
+  if(cam.calN>0){cam.calSum+=cam.angle;if(--cam.calN===0){cam.base=cam.calSum/25;toast('Đã hiệu chỉnh xong. Nghiêng đầu sang trái hoặc phải!')}}
+  cam.tilt=cam.angle-cam.base;
+  w.x+=(cx-w.x)*.7;w.y+=(cy-w.y)*.7;
+}
+function camDir(){
+  if(!cam.on||!cam.cal||!cam.found||cam.calN>0)return null;
+  let t=S.inv?-cam.tilt:cam.tilt;
+  return t<-S.thr?'L':t>S.thr?'R':null;
+}
+function drawCam(){
+  if(cam.on&&vid.readyState>=2){cx2.save();cx2.translate(320,0);cx2.scale(-1,1);cx2.drawImage(vid,0,0,320,240);cx2.restore()}
+  else{cx2.fillStyle='#111';cx2.fillRect(0,0,320,240)}
+  cx2.lineWidth=2;
+  if(cam.cal&&cam.found){const k=320/W,w=cam.win;cx2.strokeStyle='#22c55e';cx2.beginPath();cx2.ellipse(w.x*k,w.y*k,w.rx*k,w.ry*k,(cam.tilt*(S.inv?-1:1))*Math.PI/180,0,7);cx2.stroke()}
+  else{cx2.strokeStyle='rgba(255,255,255,.7)';cx2.setLineDash([6,5]);cx2.beginPath();cx2.ellipse(160,120,60,80,0,0,7);cx2.stroke();cx2.setLineDash([])}
+  const t=cam.on&&cam.cal?(S.inv?-cam.tilt:cam.tilt):0;
+  $('mk').style.left=(50+clamp(t,-45,45)/45*50-0.8)+'%';
+  $('angTxt').textContent=cam.cal?('Góc: '+(t>0?'+':'')+t.toFixed(0)+'°'):'Góc: –';
+}
+
+/* ---------- Trò chơi ---------- */
+let G={state:'idle'},keyDir=null;
+const view=$('view');
+function setTab(t){
+  $('tPlay').classList.toggle('on',t==='play');$('tEdit').classList.toggle('on',t==='edit');
+  if(t==='play'){renderStart()}else{G={state:'idle'};renderEditor()}
+}
+$('tPlay').onclick=()=>setTab('play');$('tEdit').onclick=()=>setTab('edit');
+
+function renderStart(){
+  G={state:'idle'};
+  view.innerHTML=`<div class="card rounded-2xl p-6 text-center">
+    <h2 class="text-xl font-bold">Sẵn sàng chưa?</h2>
+    <p class="mut mt-2">${Q.length} câu hỏi · mặc định ${S.time}s/câu. Nghiêng đầu sang <b>trái</b> hoặc <b>phải</b> và giữ ${S.hold}s để chọn đáp án.</p>
+    <p class="mut text-sm mt-1">Không có webcam? Giữ phím ← / → hoặc bấm trực tiếp vào đáp án.</p>
+    <button id="go" class="btn mt-5 text-lg">▶ Bắt đầu</button></div>`;
+  $('go').onclick=startGame;
+}
+function startGame(){
+  if(!Q.length){view.innerHTML='<div class="card rounded-2xl p-6 text-center">Chưa có câu hỏi. Hãy vào “Soạn câu hỏi”.</div>';return}
+  G={state:'q',i:0,score:0,log:[]};showQ();
+}
+function ansHTML(q,k){
+  const a=q.a[k];
+  return `<div class="ans" id="ans${k}" data-k="${k}"><div class="text-xs mut mb-2">${k?'Nghiêng phải ▶':'◀ Nghiêng trái'}</div>
+    ${a.img?`<img src="${a.img}" class="mx-auto max-h-40 rounded-lg mb-2 object-contain">`:''}
+    <div class="text-lg font-semibold">${esc(a.t)}</div><div class="pbar" id="p${k}"></div></div>`;
+}
+function showQ(){
+  const q=Q[G.i];
+  view.innerHTML=`<div class="card rounded-2xl p-5">
+    <div class="flex justify-between text-sm"><span>Câu ${G.i+1}/${Q.length}</span><span>Điểm: <b id="sc">${G.score}</b></span><span id="tl"></span></div>
+    <div class="h-2 rounded-full mt-2 overflow-hidden" style="background:var(--line)"><div id="tb" class="h-full" style="background:var(--acc);width:100%"></div></div>
+    <h2 class="text-2xl font-bold mt-4">${esc(q.q)}</h2>
+    ${q.qImg?`<img src="${q.qImg}" class="mt-3 max-h-64 rounded-xl object-contain">`:''}
+    <div class="grid grid-cols-2 gap-3 mt-5">${ansHTML(q,0)}${ansHTML(q,1)}</div>
+    <p id="fb" class="text-center font-bold text-lg mt-4 h-7"></p></div>`;
+  view.querySelectorAll('.ans').forEach(e=>e.onclick=()=>answer(+e.dataset.k));
+  G.state='q';G.t0=performance.now();G.dur=(q.time||S.time)*1000;G.dir=null;G.since=0;
+}
+function answer(k){
+  if(G.state!=='q')return;
+  G.state='fb';const q=Q[G.i],ok=k===q.correct;
+  if(ok)G.score++;
+  G.log.push({q:q.q,ok,picked:k<0?'(hết giờ)':q.a[k].t,right:q.a[q.correct].t});
+  $('ans'+q.correct).classList.add('ok');
+  if(k>=0&&!ok)$('ans'+k).classList.add('bad');
+  $('fb').textContent=k<0?'⏰ Hết giờ!':ok?'✅ Chính xác!':'❌ Chưa đúng';
+  $('fb').style.color=ok?'var(--ok)':'var(--bad)';
+  $('sc').textContent=G.score;
+  setTimeout(()=>{if(G.state!=='fb')return;G.i++;G.i>=Q.length?showEnd():showQ()},1400);
+}
+function showEnd(){
+  G.state='end';
+  view.innerHTML=`<div class="card rounded-2xl p-6"><h2 class="text-2xl font-bold text-center">🎉 Kết quả: ${G.score}/${Q.length}</h2>
+    <ul class="mt-4 space-y-2 text-sm">${G.log.map((l,i)=>`<li class="p-3 rounded-xl" style="background:var(--bg)">${l.ok?'✅':'❌'} <b>Câu ${i+1}:</b> ${esc(l.q)}<br><span class="mut">Bạn chọn: ${esc(l.picked)} · Đáp án đúng: ${esc(l.right)}</span></li>`).join('')}</ul>
+    <div class="flex gap-2 justify-center mt-5"><button id="again" class="btn">Chơi lại</button><button id="toEdit" class="tab">Soạn câu hỏi</button></div></div>`;
+  $('again').onclick=startGame;$('toEdit').onclick=()=>setTab('edit');
+}
+function gameTick(now){
+  if(G.state!=='q')return;
+  const left=G.dur-(now-G.t0);
+  if(left<=0){answer(-1);return}
+  $('tb').style.width=(left/G.dur*100)+'%';$('tl').textContent=Math.ceil(left/1000)+'s';
+  const dir=keyDir||camDir();
+  if(dir!==G.dir){G.dir=dir;G.since=now}
+  [0,1].forEach(k=>{const el=$('p'+k);if(el)el.style.width=(dir===(k?'R':'L')?clamp((now-G.since)/(S.hold*1000),0,1)*100:0)+'%'});
+  if(dir&&now-G.since>=S.hold*1000)answer(dir==='L'?0:1);
+}
+addEventListener('keydown',e=>{if(/INPUT|TEXTAREA/.test(e.target.tagName))return;if(e.key==='ArrowLeft')keyDir='L';if(e.key==='ArrowRight')keyDir='R'});
+addEventListener('keyup',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight')keyDir=null});
+
+/* ---------- Trình soạn câu hỏi ---------- */
+const getImg=(q,k)=>k==='q'?q.qImg:q.a[k].img;
+const setImg=(q,k,v)=>{if(k==='q')q.qImg=v;else q.a[k].img=v};
+function imgBox(i,k,src){
+  return `<div class="flex items-center gap-2 mt-2">${src?`<img src="${src}" class="h-14 w-14 object-cover rounded-lg">`:''}
+  <button class="btn-s" data-act="img" data-i="${i}" data-k="${k}">${src?'Đổi ảnh':'🖼 Thêm ảnh'}</button>
+  ${src?`<button class="btn-s" data-act="rm" data-i="${i}" data-k="${k}">Xoá ảnh</button>`:''}</div>`;
+}
+function renderEditor(){
+  view.innerHTML=`<div class="space-y-4">${Q.map((q,i)=>`
+   <div class="card rounded-2xl p-4">
+    <div class="flex items-center justify-between"><b>Câu ${i+1}</b>
+      <div class="flex gap-1"><button class="btn-s" data-act="up" data-i="${i}">↑</button><button class="btn-s" data-act="dn" data-i="${i}">↓</button><button class="btn-s" data-act="del" data-i="${i}">✕ Xoá</button></div></div>
+    <textarea class="inp mt-2" rows="2" data-f="q" data-i="${i}" placeholder="Nội dung câu hỏi">${esc(q.q)}</textarea>
+    ${imgBox(i,'q',q.qImg)}
+    <div class="grid sm:grid-cols-2 gap-3 mt-3">${[0,1].map(k=>`
+      <div class="p-3 rounded-xl" style="border:1px solid var(--line)">
+        <div class="flex justify-between text-sm"><span>${k?'Nghiêng phải ▶':'◀ Nghiêng trái'}</span>
+          <label class="flex items-center gap-1"><input type="radio" name="c${i}" data-f="c" data-i="${i}" data-k="${k}" ${q.correct===k?'checked':''}> Đúng</label></div>
+        <input class="inp mt-2" data-f="t" data-i="${i}" data-k="${k}" value="${esc(q.a[k].t)}" placeholder="Nội dung đáp án">
+        ${imgBox(i,k,q.a[k].img)}</div>`).join('')}</div>
+    <label class="text-sm mt-3 flex items-center gap-2">Thời gian riêng (giây):
+      <input type="number" min="3" max="120" class="inp" style="width:90px" data-f="time" data-i="${i}" value="${q.time||''}" placeholder="${S.time}"> <span class="mut">để trống = mặc định</span></label>
+   </div>`).join('')}
+   <div class="flex gap-2"><button class="btn" data-act="add">＋ Thêm câu hỏi</button><button class="btn-s" data-act="reset">Khôi phục câu mẫu</button></div></div>`;
+}
+view.addEventListener('input',e=>{
+  const t=e.target,f=t.dataset.f;if(!f||G.state!=='idle')return;
+  const q=Q[+t.dataset.i];if(!q)return;
+  if(f==='q')q.q=t.value;else if(f==='t')q.a[+t.dataset.k].t=t.value;
+  else if(f==='time')q.time=t.value?clamp(+t.value,3,120):null;
+  save();
+});
+view.addEventListener('change',e=>{const t=e.target;if(t.dataset.f==='c'){Q[+t.dataset.i].correct=+t.dataset.k;save()}});
+view.addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]');if(!b)return;
+  const act=b.dataset.act,i=+b.dataset.i,k=b.dataset.k==='q'?'q':+b.dataset.k;
+  if(act==='add')Q.push({q:'',qImg:'',a:[{t:'',img:''},{t:'',img:''}],correct:0,time:null});
+  else if(act==='del')Q.splice(i,1);
+  else if(act==='up'&&i>0)[Q[i-1],Q[i]]=[Q[i],Q[i-1]];
+  else if(act==='dn'&&i<Q.length-1)[Q[i+1],Q[i]]=[Q[i],Q[i+1]];
+  else if(act==='rm')setImg(Q[i],k,'');
+  else if(act==='reset'){Q=JSON.parse(JSON.stringify(DEF_Q))}
+  else if(act==='img'){pickImage(url=>{setImg(Q[i],k,url);save();renderEditor()});return}
+  save();renderEditor();
+});
+function pickImage(cb){
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/*';
+  inp.onchange=()=>{
+    const f=inp.files[0];if(!f)return;
+    const fr=new FileReader();
+    fr.onload=()=>{const im=new Image();im.onload=()=>{
+      const m=640,s=Math.min(1,m/Math.max(im.width,im.height)),c=document.createElement('canvas');
+      c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);
+      c.getContext('2d').drawImage(im,0,0,c.width,c.height);cb(c.toDataURL('image/jpeg',.8));
+    };im.src=fr.result};
+    fr.readAsDataURL(f);
+  };
+  inp.click();
+}
+
+/* ---------- Vòng lặp chính ---------- */
+function loop(now){
+  if(cam.on&&cam.cal&&vid.readyState>=2&&now-cam.last>45){cam.last=now;analyse()}
+  drawCam();gameTick(now);requestAnimationFrame(loop);
+}
+renderStart();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
